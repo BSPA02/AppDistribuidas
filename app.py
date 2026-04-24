@@ -89,7 +89,6 @@ def listar_productos():
         conn = get_connection()
         cursor = conn.cursor()
 
-        # Ajustado a los nombres reales de tu tabla [dbo].[Productos]
         cursor.execute("""
             SELECT TOP 20 Id, Nombre, Precio, UrlImagen
             FROM Productos
@@ -103,7 +102,7 @@ def listar_productos():
                 "id": row[0],
                 "nombre": row[1],
                 "precio": float(row[2]) if row[2] is not None else None,
-                "imagen_url": row[3], # Mapea UrlImagen de la BD a tu JSON
+                "UrlImagen": row[3],
             })
 
         return jsonify({
