@@ -1,6 +1,8 @@
 import os
-import smtplib
-from email.mime.text import MIMEText
+import json
+from urllib import error as urllib_error
+from urllib import request as urllib_request
+
 from flask import Flask, jsonify, request
 from mssql_python import connect
 
@@ -8,23 +10,34 @@ app = Flask(__name__)
 
 
 def enviar_correo_alerta(asunto, mensaje, destino):
-    email_user = os.getenv("EMAIL_USER")
-    email_password = os.getenv("EMAIL_PASSWORD")
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    resend_from = os.getenv("RESEND_FROM")
 
-    if not email_user:
-        raise ValueError("Falta EMAIL_USER")
-    if not email_password:
-        raise ValueError("Falta EMAIL_PASSWORD")
+    if not resend_api_key:
+        raise ValueError("Falta RESEND_API_KEY")
+    if not resend_from:
+        raise ValueError("Falta RESEND_FROM")
 
-    msg = MIMEText(mensaje, "plain", "utf-8")
-    msg["Subject"] = asunto
-    msg["From"] = email_user
-    msg["To"] = destino
+    payload = {
+        "from": resend_from,
+        "to": [destino],
+        "subject": asunto,
+        "text": mensaje,
+    }
 
-    with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as servidor:
-        servidor.starttls()
-        servidor.login(email_user, email_password)
-        servidor.sendmail(email_user, [destino], msg.as_string())
+    req = urllib_request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {resend_api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    with urllib_request.urlopen(req, timeout=20) as response:
+        if response.status not in (200, 202):
+            raise ValueError(f"Resend respondió con estado {response.status}")
 
 def get_connection():
     server = os.getenv("DB_SERVER")
@@ -171,9 +184,25 @@ def enviar_alerta():
             "message": "Correo enviado"
         })
 
+    except urllib_error.HTTPError as e:
+        detalle = e.read().decode("utf-8", "ignore")
+        return jsonify({
+            "success": False,
+            "message": "Error al enviar con Resend",
+            "error": f"HTTP {e.code}: {detalle}"
+        }), 502
+
+    except urllib_error.URLError as e:
+        return jsonify({
+            "success": False,
+            "message": "Error de red al conectar con Resend",
+            "error": str(e)
+        }), 401
+
     except Exception as e:
         return jsonify({
             "success": False,
+            "message": "Error al enviar el correo",
             "error": str(e)
         }), 500
 
