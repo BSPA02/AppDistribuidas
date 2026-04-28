@@ -1,9 +1,31 @@
 import os
-from flask import Flask, jsonify
+import smtplib
+from email.mime.text import MIMEText
+from flask import Flask, jsonify, request
 from mssql_python import connect
 
 app = Flask(__name__)
 
+
+def enviar_correo_alerta(asunto, mensaje, destino):
+    email_user = os.getenv("EMAIL_USER")
+    email_password = os.getenv("EMAIL_PASSWORD")
+
+    if not email_user:
+        raise ValueError("Falta EMAIL_USER")
+    if not email_password:
+        raise ValueError("Falta EMAIL_PASSWORD")
+
+    msg = MIMEText(mensaje, "plain", "utf-8")
+    msg["Subject"] = asunto
+    msg["From"] = email_user
+    msg["To"] = destino
+
+    servidor = smtplib.SMTP("smtp.gmail.com", 587)
+    servidor.starttls()
+    servidor.login(email_user, email_password)
+    servidor.sendmail(email_user, [destino], msg.as_string())
+    servidor.quit()
 
 def get_connection():
     server = os.getenv("DB_SERVER")
