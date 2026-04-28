@@ -9,6 +9,17 @@ from mssql_python import connect
 app = Flask(__name__)
 
 
+def obtener_debug_resend():
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    resend_from = os.getenv("RESEND_FROM")
+
+    return {
+        "RESEND_API_KEY_EXISTS": bool(resend_api_key),
+        "RESEND_API_KEY_SUFFIX": resend_api_key[-4:] if resend_api_key else None,
+        "RESEND_FROM": resend_from,
+    }
+
+
 def enviar_correo_alerta(asunto, mensaje, destino):
     resend_api_key = os.getenv("RESEND_API_KEY")
     resend_from = os.getenv("RESEND_FROM")
@@ -160,51 +171,70 @@ def listar_productos():
 def enviar_alerta():
     try:
         data = request.get_json(silent=True)
+        debug_activo = request.args.get("debug") == "1"
 
         if not data:
-            return jsonify({
+            respuesta = {
                 "success": False,
                 "message": "El cuerpo debe ser JSON con to, subject y message"
-            }), 400
+            }
+            if debug_activo:
+                respuesta["debug"] = obtener_debug_resend()
+            return jsonify(respuesta), 400
 
         destino = data.get("to")
         asunto = data.get("subject")
         mensaje = data.get("message")
 
         if not destino or not asunto or not mensaje:
-            return jsonify({
+            respuesta = {
                 "success": False,
                 "message": "Faltan datos"
-            }), 400
+            }
+            if debug_activo:
+                respuesta["debug"] = obtener_debug_resend()
+            return jsonify(respuesta), 400
 
         enviar_correo_alerta(asunto, mensaje, destino)
 
-        return jsonify({
+        respuesta = {
             "success": True,
             "message": "Correo enviado"
-        })
+        }
+        if debug_activo:
+            respuesta["debug"] = obtener_debug_resend()
+        return jsonify(respuesta)
 
     except urllib_error.HTTPError as e:
         detalle = e.read().decode("utf-8", "ignore")
-        return jsonify({
+        respuesta = {
             "success": False,
             "message": "Error al enviar con Resend",
             "error": f"HTTP {e.code}: {detalle}"
-        }), 502
+        }
+        if request.args.get("debug") == "1":
+            respuesta["debug"] = obtener_debug_resend()
+        return jsonify(respuesta), 502
 
     except urllib_error.URLError as e:
-        return jsonify({
+        respuesta = {
             "success": False,
             "message": "Error de red al conectar con Resend",
             "error": str(e)
-        }), 401
+        }
+        if request.args.get("debug") == "1":
+            respuesta["debug"] = obtener_debug_resend()
+        return jsonify(respuesta), 503
 
     except Exception as e:
-        return jsonify({
+        respuesta = {
             "success": False,
             "message": "Error al enviar el correo",
             "error": str(e)
-        }), 500
+        }
+        if request.args.get("debug") == "1":
+            respuesta["debug"] = obtener_debug_resend()
+        return jsonify(respuesta), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
