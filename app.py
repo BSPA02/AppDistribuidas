@@ -21,11 +21,10 @@ def enviar_correo_alerta(asunto, mensaje, destino):
     msg["From"] = email_user
     msg["To"] = destino
 
-    servidor = smtplib.SMTP("smtp.gmail.com", 587)
-    servidor.starttls()
-    servidor.login(email_user, email_password)
-    servidor.sendmail(email_user, [destino], msg.as_string())
-    servidor.quit()
+    with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as servidor:
+        servidor.starttls()
+        servidor.login(email_user, email_password)
+        servidor.sendmail(email_user, [destino], msg.as_string())
 
 def get_connection():
     server = os.getenv("DB_SERVER")
@@ -147,7 +146,13 @@ def listar_productos():
 @app.route("/enviar-alerta", methods=["POST"]) 
 def enviar_alerta():
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
+
+        if not data:
+            return jsonify({
+                "success": False,
+                "message": "El cuerpo debe ser JSON con to, subject y message"
+            }), 400
 
         destino = data.get("to")
         asunto = data.get("subject")
