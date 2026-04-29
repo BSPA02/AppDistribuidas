@@ -3,9 +3,11 @@ import json
 import resend
 import threading
 from flask import Flask, jsonify, request
+from flask_cors import CORS  # <--- IMPORTAR ESTO
 from mssql_python import connect
 
 app = Flask(__name__)
+CORS(app)
 
 resend.api_key = os.environ["RESEND_API_KEY"]
 FROM_EMAIL = os.environ.get("RESEND_FROM", "onboarding@resend.dev")
@@ -140,8 +142,9 @@ def listar_productos():
 @app.route("/enviar-alerta-resend", methods=["POST"])
 def enviar_alerta_resend():
     data = request.json
-
-    correo = data.get("email")
+    
+    # Cambiamos "email" por "to" para que coincida con tu JavaScript
+    correo = data.get("to") 
     asunto = data.get("subject", "Notificación")
     mensaje = data.get("message", "Mensaje desde Render")
 
@@ -149,12 +152,12 @@ def enviar_alerta_resend():
         return jsonify({"error": "Falta el email"}), 400
 
     try:
-        # Evita WORKER TIMEOUT
         threading.Thread(target=enviar_correo_resend, args=(correo, asunto, mensaje)).start()
 
+        # Cambiamos la respuesta para que tu JS encuentre data.success
         return jsonify({
-            "status": "ok",
-            "msg": "Correo enviado (async)"
+            "success": True, 
+            "message": "Correo enviado correctamente"
         })
 
     except Exception as e:
